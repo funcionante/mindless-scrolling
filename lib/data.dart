@@ -2,11 +2,15 @@ class Item {
   final String title;
   final String description;
   final String imagePath;
+  final String url;
+  final String date;
 
   Item({
     this.title,
     this.description,
     this.imagePath,
+    this.url,
+    this.date='',
   });
 }
 

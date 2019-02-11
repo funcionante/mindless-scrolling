@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:scrolling_news/data.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() => runApp(MyApp());
 
@@ -57,7 +58,7 @@ class _HomePageState extends State<HomePage> {
         _previousState = _state;
         _state = newState;
       });
-    };
+    }
 
     _getContent() {
       List<Item> items = sampleItems;
@@ -158,7 +159,7 @@ class OptionA extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 24.0),
+      padding: const EdgeInsets.symmetric(vertical: 40.0),
       shrinkWrap: true,
       itemCount: items.length,
       itemBuilder: (BuildContext context, int index) {
@@ -171,34 +172,167 @@ class OptionA extends StatelessWidget {
 
 class OptionB extends StatelessWidget {
   final List<Item> items;
+  final PageController controller = PageController();
 
-  const OptionB({Key key, this.items}) : super(key: key);
+  OptionB({Key key, this.items}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return PageView(
+      controller: controller,
       scrollDirection: Axis.vertical,
-      children: items.map((item) => ItemView(item: item,)).toList(),
+      children: items.map((item) => OptionBView(item: item, pageController: controller,)).toList(),
     );
   }
 }
 
-class ItemView extends StatelessWidget {
+class OptionBView extends StatefulWidget {
+  final Item item;
+  final PageController pageController;
+
+  const OptionBView({Key key, this.item, this.pageController}) : super(key: key);
+
+  @override
+  OptionBViewState createState() {
+    return new OptionBViewState();
+  }
+}
+
+class OptionBViewState extends State<OptionBView> {
+  ScrollController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = ScrollController();
+
+    // wait for the first build,
+    // only then the isScrollingNotifier can be accessed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      print('ok');
+      _controller.position.isScrollingNotifier.addListener(() {
+        print('ok2');
+        if (_controller.position.isScrollingNotifier.value) {
+          if (_controller.position.pixels == _controller.position.maxScrollExtent) {
+            Timer(const Duration(milliseconds: 100), () {
+              if (_controller.position.pixels == _controller.position.maxScrollExtent) {
+                widget.pageController.animateToPage(widget.pageController.page.round() + 1, duration: const Duration(milliseconds: 500), curve: Curves.ease);
+              }
+            });
+          } else if (_controller.position.pixels == 0.0) {
+            Timer(const Duration(milliseconds: 100), () {
+              if (_controller.position.pixels == 0.0) {
+                widget.pageController.animateToPage(widget.pageController.page.round() - 1, duration: const Duration(milliseconds: 500), curve: Curves.ease);
+              }
+            });
+          }
+        }
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 40.0 + 60.0),
+      controller: _controller,
+      child: ItemView(
+        item: widget.item,
+      ),
+    );
+  }
+}
+
+class ItemView extends StatefulWidget {
   final Item item;
 
   const ItemView({Key key, this.item}) : super(key: key);
 
   @override
+  _ItemViewState createState() => new _ItemViewState();
+}
+
+class _ItemViewState extends State<ItemView> {
+  bool _isExpanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _isExpanded = false;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Image.asset(item.imagePath),
+        InkWell(
+          onTap: () {
+            setState(() {
+              _isExpanded = !_isExpanded;
+            });
+          },
+          child: Column(
+            children: <Widget>[
+              AspectRatio(aspectRatio: 4/3, child: Image.asset(widget.item.imagePath, fit: BoxFit.cover,)),
+              SizedBox(height: 4.0,),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0,),
+                child: Text(
+                  widget.item.title,
+                  style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold,),
+                ),
+              ),
+//        SizedBox(height: 8.0,),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0,),
+                child: AnimatedCrossFade(
+                  firstChild: RichText(
+                    text: TextSpan(
+                      style: TextStyle(color: Colors.black),
+                      children: [
+                        TextSpan(text: widget.item.description.substring(0, widget.item.description.length > 120 ? 120 : widget.item.description.length)),
+                        TextSpan(text: '...'),
+                        TextSpan(text: ' Ver Mais', style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                    maxLines: 3,
+                  ),
+                  secondChild: Text(widget.item.description),
+                  crossFadeState: _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                  duration: const Duration(milliseconds: 250),
+                ),
+              ),
+            ],
+          ),
+        ),
+        _isExpanded ? GestureDetector(
+          onTap: () => widget.item.url != null ? launch(widget.item.url) : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            child: Text('${widget.item.date} in NiT', style: TextStyle(color: Colors.grey),),
+          ),
+        ) : SizedBox(height: 0.0,),
+        Row(
+          children: <Widget>[
+            IconButton(
+              icon: Icon(Icons.thumb_up),
+              color: Colors.grey,
+              onPressed: () {},
+            ),
+            IconButton(
+              icon: Icon(Icons.thumb_down),
+              color: Colors.grey,
+              onPressed: () {},
+            ),
+          ],
+        ),
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: Text(item.description),
+          child: SizedBox(height: 16.0,),
         ),
-        SizedBox(height: 64.0,),
       ],
     );
   }
