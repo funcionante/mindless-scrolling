@@ -61,8 +61,6 @@ class _HomePageState extends State<HomePage> {
     }
 
     _getContent() {
-      List<Item> items = sampleItems;
-
       String option = _state != STATE_MENU ? _state : _previousState;
 
       return GestureDetector(
@@ -79,7 +77,8 @@ class _HomePageState extends State<HomePage> {
             });
           }
         },
-        child: option == STATE_A ? OptionA(items: items) : OptionB(items: items),
+        // unique key to reset likes/dislikes when choosing an option
+        child: ItemList(option: option, key: UniqueKey(),),
       );
     }
 
@@ -151,38 +150,81 @@ class Menu extends StatelessWidget {
   }
 }
 
-class OptionA extends StatelessWidget {
-  final List<Item> items;
+class ItemList extends StatefulWidget {
+  final String option;
 
-  const OptionA({Key key, this.items}) : super(key: key);
+  const ItemList({Key key, this.option}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 40.0),
-      shrinkWrap: true,
-      itemCount: items.length,
-      itemBuilder: (BuildContext context, int index) {
-        final item = items[index];
-        return ItemView(item: item);
-      },
-    );
+  ItemListState createState() {
+    return new ItemListState();
   }
 }
 
-class OptionB extends StatelessWidget {
-  final List<Item> items;
-  final PageController controller = PageController();
+class ItemListState extends State<ItemList> {
+  List<bool> likes;
+  List<bool> dislikes;
 
-  OptionB({Key key, this.items}) : super(key: key);
+  @override
+  void initState() {
+    super.initState();
+    likes = sampleItems.map((_) => false).toList();
+    dislikes = sampleItems.map((_) => false).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
+    List<Item> items = sampleItems;
+
+    if (widget.option == 'A') {
+      return ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 40.0),
+        shrinkWrap: true,
+        itemCount: items.length,
+        itemBuilder: (BuildContext context, int index) {
+          final item = items[index];
+          return ItemView(
+            item: item,
+            liked: likes[index],
+            disliked: dislikes[index],
+            onLikePressed: () => onLikePressed(index),
+            onDislikePressed: () => onDislikePressed(index),
+          );
+        },
+      );
+    }
+
+    final PageController controller = PageController();
+
     return PageView(
       controller: controller,
       scrollDirection: Axis.vertical,
-      children: items.map((item) => OptionBView(item: item, pageController: controller,)).toList(),
+      children: items.map((item) {
+        int index = items.indexOf(item);
+        return OptionBView(
+          item: item,
+          pageController: controller,
+          liked: likes[index],
+          disliked: dislikes[index],
+          onLikePressed: () => onLikePressed(index),
+          onDislikePressed: () => onDislikePressed(index),
+        );
+      }).toList(),
     );
+  }
+
+  void onLikePressed(index) {
+    setState(() {
+      likes[index] = !likes[index];
+      dislikes[index] = false;
+    });
+  }
+
+  void onDislikePressed(index) {
+    setState(() {
+      likes[index] = false;
+      dislikes[index] = !dislikes[index];
+    });
   }
 }
 
@@ -190,12 +232,18 @@ class OptionBView extends StatefulWidget {
   final Item item;
   final PageController pageController;
 
-  const OptionBView({Key key, this.item, this.pageController}) : super(key: key);
+  final liked;
+  final disliked;
+
+  final VoidCallback onLikePressed;
+  final VoidCallback onDislikePressed;
+
+  const OptionBView({Key key, this.item, this.pageController,
+    this.liked, this.disliked, this.onLikePressed, this.onDislikePressed,
+  }) : super(key: key);
 
   @override
-  OptionBViewState createState() {
-    return new OptionBViewState();
-  }
+  OptionBViewState createState() => OptionBViewState();
 }
 
 class OptionBViewState extends State<OptionBView> {
@@ -267,6 +315,10 @@ class OptionBViewState extends State<OptionBView> {
         controller: _controller,
         child: ItemView(
           item: widget.item,
+          liked: widget.liked,
+          disliked: widget.disliked,
+          onLikePressed: widget.onLikePressed,
+          onDislikePressed: widget.onDislikePressed,
         ),
       ),
     );
@@ -276,7 +328,14 @@ class OptionBViewState extends State<OptionBView> {
 class ItemView extends StatefulWidget {
   final Item item;
 
-  const ItemView({Key key, this.item}) : super(key: key);
+  final liked;
+  final disliked;
+
+  final VoidCallback onLikePressed;
+  final VoidCallback onDislikePressed;
+
+  const ItemView({Key key, this.item, this.liked, this.disliked,
+  this.onLikePressed, this.onDislikePressed}) : super(key: key);
 
   @override
   _ItemViewState createState() => new _ItemViewState();
@@ -311,7 +370,7 @@ class _ItemViewState extends State<ItemView> {
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0,),
                 child: Text(
                   widget.item.title,
-                  style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold,),
+                  style: TextStyle(fontSize: 17.5, fontWeight: FontWeight.bold,),
                 ),
               ),
               Padding(
@@ -319,7 +378,7 @@ class _ItemViewState extends State<ItemView> {
                 child: AnimatedCrossFade(
                   firstChild: RichText(
                     text: TextSpan(
-                      style: TextStyle(color: Colors.black),
+                      style: TextStyle(color: Colors.black, fontSize: 15.0),
                       children: [
                         TextSpan(text: widget.item.description.substring(0, widget.item.description.length > 120 ? 120 : widget.item.description.length)),
                         TextSpan(text: '...'),
@@ -328,7 +387,7 @@ class _ItemViewState extends State<ItemView> {
                     ),
                     maxLines: 3,
                   ),
-                  secondChild: Text(widget.item.description),
+                  secondChild: Text(widget.item.description, style: TextStyle(fontSize: 15.0),),
                   crossFadeState: _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
                   duration: const Duration(milliseconds: 250),
                 ),
@@ -347,13 +406,13 @@ class _ItemViewState extends State<ItemView> {
           children: <Widget>[
             IconButton(
               icon: Icon(Icons.thumb_up),
-              color: Colors.grey,
-              onPressed: () {},
+              color: widget.liked ? Colors.green : Colors.grey,
+              onPressed: () => widget.onLikePressed(),
             ),
             IconButton(
               icon: Icon(Icons.thumb_down),
-              color: Colors.grey,
-              onPressed: () {},
+              color: widget.disliked ? Colors.red : Colors.grey,
+              onPressed: () => widget.onDislikePressed(),
             ),
           ],
         ),
