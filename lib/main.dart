@@ -199,7 +199,15 @@ class OptionBView extends StatefulWidget {
 }
 
 class OptionBViewState extends State<OptionBView> {
+  /// the scroll controller of the item view
   ScrollController _controller;
+
+  /// flag to indicate that the scroll movement can be interpreted to change
+  /// to other page (with other item view)
+  bool _mightChangePage;
+
+  /// total offset from a scroll event since the finger touches the screen
+  double _totalOffset;
 
   @override
   void initState() {
@@ -207,38 +215,59 @@ class OptionBViewState extends State<OptionBView> {
 
     _controller = ScrollController();
 
-    // wait for the first build,
-    // only then the isScrollingNotifier can be accessed
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      print('ok');
-      _controller.position.isScrollingNotifier.addListener(() {
-        print('ok2');
-        if (_controller.position.isScrollingNotifier.value) {
-          if (_controller.position.pixels == _controller.position.maxScrollExtent) {
-            Timer(const Duration(milliseconds: 100), () {
-              if (_controller.position.pixels == _controller.position.maxScrollExtent) {
-                widget.pageController.animateToPage(widget.pageController.page.round() + 1, duration: const Duration(milliseconds: 500), curve: Curves.ease);
-              }
-            });
-          } else if (_controller.position.pixels == 0.0) {
-            Timer(const Duration(milliseconds: 100), () {
-              if (_controller.position.pixels == 0.0) {
-                widget.pageController.animateToPage(widget.pageController.page.round() - 1, duration: const Duration(milliseconds: 500), curve: Curves.ease);
-              }
-            });
-          }
-        }
-      });
-    });
+    _mightChangePage = false;
+    _totalOffset = 0.0;
   }
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(top: 40.0 + 60.0),
-      controller: _controller,
-      child: ItemView(
-        item: widget.item,
+    return Listener(
+      onPointerMove: (PointerMoveEvent event) {
+        // ignore this if the controller is no longer being used; it will
+        // happen when the page already changed but the finger is still in
+        // contact with the screen
+        if (!_controller.hasClients) return;
+
+        // ifnore this if there is no indication that the page can be changed;
+        // it will happen when onPointerMove is called several times, so only
+        // the first time will be counted
+        if (!_mightChangePage) return;
+
+        // get the offset of the current update
+        double offset = event.delta.dy;
+
+        // update the total offset
+        _totalOffset += offset;
+
+        // ignore this if the finger movement is not big enough
+        if (_totalOffset.abs() < 32.0) return;
+
+        // prepare to change the page
+
+        // do not indicate that the page can be changed anymore, because it is
+        // about to be changed now
+        _mightChangePage = false;
+
+        // if the scroll is upwards and the list is totally scrolled, move to the next page
+        // else if the scroll is downwards and the list has no scroll, move to the previous page
+        if (offset.isNegative && _controller.position.pixels == _controller.position.maxScrollExtent) {
+          widget.pageController.animateToPage(widget.pageController.page.round() + 1, duration: const Duration(milliseconds: 500), curve: Curves.ease);
+        } else if (!offset.isNegative && _controller.position.pixels == 0) {
+          widget.pageController.animateToPage(widget.pageController.page.round() - 1, duration: const Duration(milliseconds: 500), curve: Curves.ease);
+        }
+      },
+      onPointerDown: (_) {
+        _mightChangePage = true;
+        _totalOffset = 0.0;
+      },
+      onPointerUp: (_) {},
+      onPointerCancel: (_) => print('cancel'),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(top: 40.0 + 60.0),
+        controller: _controller,
+        child: ItemView(
+          item: widget.item,
+        ),
       ),
     );
   }
@@ -276,7 +305,7 @@ class _ItemViewState extends State<ItemView> {
           },
           child: Column(
             children: <Widget>[
-              AspectRatio(aspectRatio: 4/3, child: Image.asset(widget.item.imagePath, fit: BoxFit.cover,)),
+              AspectRatio(aspectRatio: 3/2, child: Image.asset(widget.item.imagePath, fit: BoxFit.cover,)),
               SizedBox(height: 4.0,),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0,),
@@ -285,7 +314,6 @@ class _ItemViewState extends State<ItemView> {
                   style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold,),
                 ),
               ),
-//        SizedBox(height: 8.0,),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0,),
                 child: AnimatedCrossFade(
