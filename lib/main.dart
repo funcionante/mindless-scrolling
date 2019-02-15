@@ -254,8 +254,8 @@ class OptionBViewState extends State<OptionBView> {
   /// to other page (with other item view)
   bool _mightChangePage;
 
-  /// total offset from a scroll event since the finger touches the screen
-  double _totalOffset;
+  /// collection of offset updates from a scroll event since the finger touches the screen
+  List<_OffsetLog> _offsets;
 
   @override
   void initState() {
@@ -264,7 +264,7 @@ class OptionBViewState extends State<OptionBView> {
     _controller = ScrollController();
 
     _mightChangePage = false;
-    _totalOffset = 0.0;
+    _offsets = [];
   }
 
   @override
@@ -284,11 +284,19 @@ class OptionBViewState extends State<OptionBView> {
         // get the offset of the current update
         double offset = event.delta.dy;
 
-        // update the total offset
-        _totalOffset += offset;
+        // update the collection of offsets
+        _offsets.add(_OffsetLog(offset, DateTime.now()));
 
-        // ignore this if the finger movement is not big enough
-        if (_totalOffset.abs() < 32.0) return;
+        // get only the offsets from the last ms,
+        // so slight involuntary movements are ignored over time
+        List<_OffsetLog> lastOffsets = _offsets.where((o) => o.timestamp.compareTo(DateTime.now().subtract(Duration(milliseconds: 50))) > 0).toList();
+
+        // calculate the sum of the last offsets
+        double totalOffset = 0.0;
+        lastOffsets.forEach((o) => totalOffset += o.offset);
+
+        // ignore this if the finger movement (total offset) is not big enough
+        if (totalOffset.abs() < 32.0) return;
 
         // prepare to change the page
 
@@ -306,10 +314,9 @@ class OptionBViewState extends State<OptionBView> {
       },
       onPointerDown: (_) {
         _mightChangePage = true;
-        _totalOffset = 0.0;
+        _offsets = [];
       },
       onPointerUp: (_) {},
-      onPointerCancel: (_) => print('cancel'),
       child: SingleChildScrollView(
         padding: const EdgeInsets.only(top: 40.0 + 60.0),
         controller: _controller,
@@ -323,6 +330,13 @@ class OptionBViewState extends State<OptionBView> {
       ),
     );
   }
+}
+
+class _OffsetLog {
+  final double offset;
+  final DateTime timestamp;
+
+  _OffsetLog(this.offset, this.timestamp);
 }
 
 class ItemView extends StatefulWidget {
